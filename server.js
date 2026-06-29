@@ -26,6 +26,8 @@ const PORT = parseInt(process.env.PORT, 10) || 2202;
 
 const app = express();
 app.use(express.json());
+// Serve static assets (index.html, icons, manifest) from public/.
+app.use(express.static(path.join(__dirname, 'public')));
 
 const server = http.createServer(app);
 const wss = new WebSocketServer({ server });

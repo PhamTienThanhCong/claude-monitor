@@ -9,6 +9,10 @@
   <meta name="apple-mobile-web-app-title" content="Claude Monitor" />
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="theme-color" content="#0a0a0b" />
+  <!-- Home Screen / PWA icons -->
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+  <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png" />
+  <link rel="manifest" href="/manifest.webmanifest" />
   <title>Claude Monitor</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -232,17 +236,17 @@
   </div>
 
   <div id="panel">
-    <h3>Cài đặt hiển thị</h3>
+    <h3>Display settings</h3>
     <div class="row">
-      <label>Kích thước <span id="size-val">100%</span></label>
+      <label>Size <span id="size-val">100%</span></label>
       <input id="size-range" type="range" min="60" max="200" step="5" value="100" />
     </div>
     <div class="row">
-      <label>Full width (1 card / hàng)
+      <label>Full width (1 card per row)
         <input id="fw-check" type="checkbox" />
       </label>
     </div>
-    <button class="reset" id="reset-btn">Khôi phục mặc định</button>
+    <button class="reset" id="reset-btn">Reset to defaults</button>
   </div>
 
   <div id="grid"></div>
@@ -327,9 +331,9 @@
       fsBtn.style.display = 'none';
     } else if (!fsSupported) {
       // iPhone Safari: no Fullscreen API. Guide the user to install as an app.
-      fsBtn.textContent = '⤓ Toàn màn hình';
+      fsBtn.textContent = '⤓ Fullscreen';
       fsBtn.addEventListener('click', () => {
-        alert('iPhone không cho fullscreen trong Safari.\n\nĐể chạy TOÀN màn hình:\n1. Bấm nút Share (ô vuông có mũi tên) ở thanh dưới Safari\n2. Chọn "Add to Home Screen" / "Thêm vào MH chính"\n3. Mở app vừa tạo từ màn hình chính — sẽ full màn hình, không còn thanh địa chỉ.');
+        alert('iPhone Safari does not allow fullscreen.\n\nTo run TRULY fullscreen:\n1. Tap the Share button (square with an arrow) in Safari\'s bottom bar\n2. Choose "Add to Home Screen"\n3. Open the new app from your Home Screen — it runs fullscreen with no address bar.');
       });
     } else {
       fsBtn.addEventListener('click', () => {
@@ -406,7 +410,7 @@
       if (!card) return;
       const id = card.dataset.id;
       if (!id) return;
-      if (confirm('Tắt session này khỏi dashboard?')) {
+      if (confirm('Dismiss this session from the dashboard?')) {
         fetch('/status/' + encodeURIComponent(id), { method: 'DELETE' }).catch(() => {});
       }
     });
