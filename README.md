@@ -89,6 +89,14 @@ browser on each change.
 hook fires (you close the window, `/exit`, or quit VS Code), which removes it
 from the dashboard. You can also tap a card to dismiss it manually.
 
+**Known limitation — user interrupt.** Claude Code fires no hook when you
+interrupt it mid-response (Esc / stop button); the `Stop` hook explicitly does
+*not* run on an interrupt, and there is no abort/cancel event. So a card that was
+`working` (yellow) stays yellow after an interrupt until the next signal — when
+you submit a new prompt (`UserPromptSubmit` → working) or Claude finishes a turn
+(`Stop` → free). This is intentional: the alternative (a timeout that flips
+yellow→green) would misfire on legitimately long-running tools.
+
 ## Configuration (`.env`)
 
 The port lives in a plain `.env` file at the project root so you can change it in
