@@ -1,0 +1,13 @@
+{
+  "name": "claude-monitor",
+  "version": "1.0.0",
+  "description": "Local network traffic-light dashboard for Claude Code sessions",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.0",
+    "ws": "^8.0.0"
+  }
+}

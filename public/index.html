@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <!-- iOS: run fullscreen (no Safari chrome) when launched from Home Screen -->
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Claude Monitor" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="theme-color" content="#0a0a0b" />
+  <title>Claude Monitor</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0a0a0b;
+      --card: #18181b;
+      --card-border: #27272a;
+      --text: #e4e4e7;
+      --muted: #71717a;
+      --green: #22c55e;
+      --yellow: #eab308;
+      --red: #ef4444;
+      --scale: 1;            /* card size multiplier, set from localStorage */
+    }
+
+    html, body {
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
+    }
+
+    #topbar {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      height: 44px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 16px;
+      z-index: 10;
+    }
+
+    #conn {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    #conn-dot {
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      background: var(--muted);
+      transition: background 0.3s;
+    }
+    #conn-dot.online { background: var(--green); }
+
+    #topbar-right {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .tbtn {
+      background: var(--card);
+      border: 1px solid var(--card-border);
+      color: var(--text);
+      border-radius: 8px;
+      padding: 6px 12px;
+      font-size: 13px;
+      cursor: pointer;
+      line-height: 1.2;
+    }
+    .tbtn:active { opacity: 0.7; }
+
+    /* Settings popover */
+    #panel {
+      position: fixed;
+      top: 48px;
+      right: 12px;
+      z-index: 20;
+      background: var(--card);
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      padding: 16px;
+      width: 240px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+      display: none;
+    }
+    #panel.open { display: block; }
+    #panel h3 {
+      font-size: 13px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 12px;
+      font-weight: 600;
+    }
+    #panel .row { margin-bottom: 14px; }
+    #panel label {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 14px;
+      gap: 10px;
+    }
+    #panel input[type="range"] { width: 100%; margin-top: 8px; accent-color: var(--green); }
+    #panel input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--green); }
+    #size-val { color: var(--muted); font-variant-numeric: tabular-nums; }
+    #panel .reset {
+      width: 100%;
+      margin-top: 4px;
+      background: transparent;
+      border: 1px solid var(--card-border);
+      color: var(--muted);
+      border-radius: 8px;
+      padding: 8px;
+      font-size: 13px;
+      cursor: pointer;
+    }
+
+    #grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+      padding: 56px 16px 16px;
+      align-content: flex-start;
+    }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--card-border);
+      border-radius: 14px;
+      padding: calc(16px * var(--scale)) calc(18px * var(--scale));
+      min-width: calc(220px * var(--scale));
+      flex: 0 1 calc(260px * var(--scale));
+      display: flex;
+      flex-direction: column;
+      gap: calc(8px * var(--scale));
+    }
+
+    /* Full-width mode: one card stretches the full row */
+    #grid.full-width .card {
+      flex-basis: 100%;
+      min-width: 0;
+      width: 100%;
+    }
+
+    .card-head {
+      display: flex;
+      align-items: center;
+      gap: calc(12px * var(--scale));
+    }
+
+    .dot {
+      width: calc(22px * var(--scale)); height: calc(22px * var(--scale));
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .dot.free    { background: var(--green); }
+    .dot.working { background: var(--yellow); animation: pulse 1.4s ease-in-out infinite; }
+    .dot.waiting { background: var(--red);    animation: pulse 1.0s ease-in-out infinite; }
+
+    @keyframes pulse {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(255,255,255,0.0); opacity: 1; }
+      50%      { box-shadow: 0 0 0 8px rgba(255,255,255,0.0); opacity: 0.55; }
+    }
+
+    .status-label {
+      font-size: calc(13px * var(--scale));
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .status-label.free    { color: var(--green); }
+    .status-label.working { color: var(--yellow); }
+    .status-label.waiting { color: var(--red); }
+
+    .project {
+      font-size: calc(17px * var(--scale));
+      font-weight: 600;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .conversation {
+      font-size: calc(13px * var(--scale));
+      color: var(--text);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .meta {
+      font-size: calc(11px * var(--scale));
+      color: var(--muted);
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      margin-top: 2px;
+    }
+    .sid { font-family: ui-monospace, Menlo, monospace; }
+
+    #empty {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--muted);
+      font-size: 20px;
+      pointer-events: none;
+    }
+    #empty.hidden { display: none; }
+  </style>
+</head>
+<body>
+  <div id="topbar">
+    <div id="conn">
+      <span id="conn-dot"></span>
+      <span id="conn-text">connecting…</span>
+    </div>
+    <div id="topbar-right">
+      <button id="settings-btn" class="tbtn">⚙</button>
+      <button id="fs-btn" class="tbtn">⛶ Fullscreen</button>
+    </div>
+  </div>
+
+  <div id="panel">
+    <h3>Cài đặt hiển thị</h3>
+    <div class="row">
+      <label>Kích thước <span id="size-val">100%</span></label>
+      <input id="size-range" type="range" min="60" max="200" step="5" value="100" />
+    </div>
+    <div class="row">
+      <label>Full width (1 card / hàng)
+        <input id="fw-check" type="checkbox" />
+      </label>
+    </div>
+    <button class="reset" id="reset-btn">Khôi phục mặc định</button>
+  </div>
+
+  <div id="grid"></div>
+  <div id="empty">No active sessions</div>
+
+  <script>
+    const grid = document.getElementById('grid');
+    const empty = document.getElementById('empty');
+    const connDot = document.getElementById('conn-dot');
+    const connText = document.getElementById('conn-text');
+    const fsBtn = document.getElementById('fs-btn');
+
+    // ---- Settings (persisted to localStorage) ----
+    const STORE_KEY = 'claude-monitor-settings';
+    const panel = document.getElementById('panel');
+    const settingsBtn = document.getElementById('settings-btn');
+    const sizeRange = document.getElementById('size-range');
+    const sizeVal = document.getElementById('size-val');
+    const fwCheck = document.getElementById('fw-check');
+    const resetBtn = document.getElementById('reset-btn');
+
+    const DEFAULTS = { scale: 100, fullWidth: false };
+    let settings = loadSettings();
+
+    function loadSettings() {
+      try {
+        const s = JSON.parse(localStorage.getItem(STORE_KEY)) || {};
+        return {
+          scale: typeof s.scale === 'number' ? s.scale : DEFAULTS.scale,
+          fullWidth: !!s.fullWidth,
+        };
+      } catch (e) {
+        return { ...DEFAULTS };
+      }
+    }
+    function saveSettings() {
+      try { localStorage.setItem(STORE_KEY, JSON.stringify(settings)); } catch (e) {}
+    }
+    function applySettings() {
+      document.documentElement.style.setProperty('--scale', (settings.scale / 100).toFixed(2));
+      grid.classList.toggle('full-width', settings.fullWidth);
+      sizeRange.value = settings.scale;
+      sizeVal.textContent = settings.scale + '%';
+      fwCheck.checked = settings.fullWidth;
+    }
+
+    settingsBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      panel.classList.toggle('open');
+    });
+    // Tap outside the panel to close it
+    document.addEventListener('click', (e) => {
+      if (panel.classList.contains('open') && !panel.contains(e.target) && e.target !== settingsBtn) {
+        panel.classList.remove('open');
+      }
+    });
+    sizeRange.addEventListener('input', () => {
+      settings.scale = parseInt(sizeRange.value, 10);
+      applySettings();
+      saveSettings();
+    });
+    fwCheck.addEventListener('change', () => {
+      settings.fullWidth = fwCheck.checked;
+      applySettings();
+      saveSettings();
+    });
+    resetBtn.addEventListener('click', () => {
+      settings = { ...DEFAULTS };
+      applySettings();
+      saveSettings();
+    });
+
+    applySettings();
+
+    // ---- Fullscreen ----
+    const fsSupported = !!(document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen);
+    // Already running as a Home-Screen app? Hide the button entirely.
+    const isStandalone = window.navigator.standalone === true
+      || window.matchMedia('(display-mode: standalone)').matches;
+
+    if (isStandalone) {
+      fsBtn.style.display = 'none';
+    } else if (!fsSupported) {
+      // iPhone Safari: no Fullscreen API. Guide the user to install as an app.
+      fsBtn.textContent = '⤓ Toàn màn hình';
+      fsBtn.addEventListener('click', () => {
+        alert('iPhone không cho fullscreen trong Safari.\n\nĐể chạy TOÀN màn hình:\n1. Bấm nút Share (ô vuông có mũi tên) ở thanh dưới Safari\n2. Chọn "Add to Home Screen" / "Thêm vào MH chính"\n3. Mở app vừa tạo từ màn hình chính — sẽ full màn hình, không còn thanh địa chỉ.');
+      });
+    } else {
+      fsBtn.addEventListener('click', () => {
+        const el = document.documentElement;
+        if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+          (el.requestFullscreen || el.webkitRequestFullscreen).call(el);
+        } else {
+          (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+        }
+      });
+    }
+
+    // ---- Wake Lock ----
+    let wakeLock = null;
+    async function requestWakeLock() {
+      try {
+        if ('wakeLock' in navigator) {
+          wakeLock = await navigator.wakeLock.request('screen');
+          wakeLock.addEventListener('release', () => { wakeLock = null; });
+        }
+      } catch (e) { /* ignore */ }
+    }
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') requestWakeLock();
+    });
+    requestWakeLock();
+
+    // ---- Time formatting ----
+    function timeAgo(ts) {
+      const s = Math.floor((Date.now() - ts) / 1000);
+      if (s < 5) return 'just now';
+      if (s < 60) return s + 's ago';
+      const m = Math.floor(s / 60);
+      return m + 'm ago';
+    }
+
+    function render(sessions) {
+      empty.classList.toggle('hidden', sessions.length > 0);
+      grid.innerHTML = '';
+      for (const s of sessions) {
+        const status = ['free', 'working', 'waiting'].includes(s.status) ? s.status : 'free';
+        const card = document.createElement('div');
+        card.className = 'card';
+        card.dataset.id = s.session_id;
+        card.innerHTML = `
+          <div class="card-head">
+            <div class="dot ${status}"></div>
+            <div class="status-label ${status}">${status}</div>
+          </div>
+          <div class="project">${escapeHtml(s.project || 'unknown')}</div>
+          <div class="conversation">${escapeHtml(s.conversation || '—')}</div>
+          <div class="meta">
+            <span class="sid">${escapeHtml(shortId(s.session_id))}</span>
+            <span>${s.lastSeen ? timeAgo(s.lastSeen) : ''}</span>
+          </div>
+        `;
+        grid.appendChild(card);
+      }
+    }
+
+    function shortId(id) {
+      if (!id) return '?';
+      return id.length > 12 ? id.slice(0, 8) + '…' : id;
+    }
+    function escapeHtml(str) {
+      return String(str).replace(/[&<>"']/g, c => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+      }[c]));
+    }
+
+    // ---- Tap a card to dismiss it (handy for lingering red cards) ----
+    grid.addEventListener('click', (e) => {
+      const card = e.target.closest('.card');
+      if (!card) return;
+      const id = card.dataset.id;
+      if (!id) return;
+      if (confirm('Tắt session này khỏi dashboard?')) {
+        fetch('/status/' + encodeURIComponent(id), { method: 'DELETE' }).catch(() => {});
+      }
+    });
+
+    // ---- WebSocket with auto-reconnect ----
+    let ws = null;
+    let lastSessions = [];
+
+    function connect() {
+      const url = `ws://${location.host}`;
+      ws = new WebSocket(url);
+
+      ws.onopen = () => {
+        connDot.classList.add('online');
+        connText.textContent = 'connected';
+      };
+      ws.onmessage = (ev) => {
+        try {
+          const msg = JSON.parse(ev.data);
+          if (msg.type === 'sessions') {
+            lastSessions = msg.sessions || [];
+            render(lastSessions);
+          }
+        } catch (e) { /* ignore */ }
+      };
+      ws.onclose = () => {
+        connDot.classList.remove('online');
+        connText.textContent = 'reconnecting…';
+        setTimeout(connect, 3000);
+      };
+      ws.onerror = () => { ws.close(); };
+    }
+    connect();
+
+    // Refresh "time ago" labels periodically without a server push
+    setInterval(() => render(lastSessions), 5000);
+  </script>
+</body>
+</html>
