@@ -41,12 +41,17 @@
     #topbar {
       position: fixed;
       top: 0; left: 0; right: 0;
-      height: 44px;
+      min-height: 44px;
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 0 16px;
+      /* Keep the header clear of the notch / status bar in standalone mode */
+      padding-top: env(safe-area-inset-top, 0px);
+      padding-left: calc(16px + env(safe-area-inset-left, 0px));
+      padding-right: calc(16px + env(safe-area-inset-right, 0px));
+      padding-bottom: 0;
       z-index: 10;
+      background: linear-gradient(var(--bg), rgba(10,10,11,0.85) 70%, rgba(10,10,11,0));
     }
 
     #conn {
@@ -86,8 +91,8 @@
     /* Settings popover */
     #panel {
       position: fixed;
-      top: 48px;
-      right: 12px;
+      top: calc(48px + env(safe-area-inset-top, 0px));
+      right: calc(12px + env(safe-area-inset-right, 0px));
       z-index: 20;
       background: var(--card);
       border: 1px solid var(--card-border);
@@ -133,7 +138,11 @@
       display: flex;
       flex-wrap: wrap;
       gap: 16px;
-      padding: 56px 16px 16px;
+      /* Clear the fixed header + notch / home indicator on all sides */
+      padding-top: calc(56px + env(safe-area-inset-top, 0px));
+      padding-left: calc(16px + env(safe-area-inset-left, 0px));
+      padding-right: calc(16px + env(safe-area-inset-right, 0px));
+      padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px));
       align-content: flex-start;
     }
 
