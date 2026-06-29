@@ -73,13 +73,23 @@ IMPORTANT — session lifecycle:
 | PreToolUse                        | working         | yellow |
 | PostToolUse                       | working         | yellow |
 | Notification (permission_prompt)  | waiting         | red    |
+| Notification (elicitation_dialog) | waiting         | red    |
+| PreToolUse of AskUserQuestion / ExitPlanMode | waiting | red |
 | Stop                              | free            | green  |
 | SessionEnd                        | (delete session)| —      |
 
-Rationale: red means "Claude is blocked asking ME to choose/confirm", which is
-the `permission_prompt` Notification — NOT the end of a turn. `Stop` means Claude
-finished its turn and is idle = green. SessionEnd (window closed / exited / quit)
-removes the card.
+Rationale: red means "Claude is blocked asking ME to choose/confirm". That covers
+two cases: (a) a permission/elicitation Notification, and (b) a blocking question
+tool. `AskUserQuestion` and `ExitPlanMode` are TOOLS, so they arrive as a
+PreToolUse (which would normally be "working") — the pre-tool script must inspect
+`tool_name` and, for these blocking tools, report `waiting` instead of `working`.
+After the user answers, PostToolUse flips it back to `working`. `Stop` means
+Claude finished its turn and is idle = green. SessionEnd removes the card.
+
+Note on parsing hook stdin: when extracting multiple fields in one pass, join them
+with a NON-whitespace separator (e.g. ASCII Unit Separator \x1f), because shell
+`read` collapses adjacent whitespace separators (tabs), which silently shifts
+columns when a middle field (like transcript_path) is empty.
 
 ## Hook scripts
 Claude Code passes hook context as JSON on stdin, including `session_id`, `cwd`,

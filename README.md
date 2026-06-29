@@ -64,14 +64,18 @@ dashboard and hook scripts themselves do **not** depend on the `.claude/` folder
 | `UserPromptSubmit`                 | `on-user-prompt.sh`   | `working` 🟡    |
 | `PreToolUse`                       | `on-pre-tool.sh`      | `working` 🟡    |
 | `PostToolUse`                      | `on-post-tool.sh`     | `working` 🟡    |
-| `Notification` (`permission_prompt`) | `on-notification.sh` | `waiting` 🔴    |
+| `Notification` (`permission_prompt`, `elicitation_dialog`) | `on-notification.sh` | `waiting` 🔴 |
+| `PreToolUse` of `AskUserQuestion` / `ExitPlanMode` | `on-pre-tool.sh` | `waiting` 🔴 |
 | `Stop`                             | `on-stop.sh`          | `free` 🟢       |
 | `SessionEnd`                       | `on-session-end.sh`   | removed         |
 
 - 🟢 **free** — Claude finished its turn / is idle, or a session just started
 - 🟡 **working** — you submitted a prompt or Claude is using tools
-- 🔴 **waiting** — Claude is asking for permission / needs you to choose (red only
-  fires on the `permission_prompt` notification, not on every idle moment)
+- 🔴 **waiting** — Claude needs YOU: a permission prompt, or a blocking
+  question/plan tool (`AskUserQuestion`, `ExitPlanMode`) that presents options to
+  choose. `on-pre-tool.sh` inspects `tool_name`: when one of these tools is about
+  to run it reports `waiting` instead of `working`; once you answer, `PostToolUse`
+  flips it back to `working`.
 
 Each hook reads the JSON context Claude Code sends on stdin (`session_id`, `cwd`,
 `transcript_path`) and does a fire-and-forget request to the server. The

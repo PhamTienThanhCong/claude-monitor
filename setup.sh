@@ -46,6 +46,7 @@ defs = [
     ("PreToolUse",       "*",                 "on-pre-tool.sh"),
     ("PostToolUse",      "*",                 "on-post-tool.sh"),
     ("Notification",     "permission_prompt", "on-notification.sh"),
+    ("Notification",     "elicitation_dialog","on-notification.sh"),
     ("Stop",             None,                "on-stop.sh"),
     ("SessionEnd",       None,                "on-session-end.sh"),
 ]

@@ -30,14 +30,27 @@ try:
     d = json.load(sys.stdin)
 except Exception:
     d = {}
-print('\t'.join(str(d.get(f, '') or '') for f in ['session_id', 'cwd', 'transcript_path']))
+fields = ['session_id', 'cwd', 'transcript_path', 'tool_name', 'hook_event_name']
+# Use a non-whitespace separator (Unit Separator) so empty fields are preserved
+# (read collapses adjacent whitespace separators like tabs, shifting columns).
+print('\x1f'.join(str(d.get(f, '') or '') for f in fields))
 " 2>/dev/null)"
 
-IFS=$'\t' read -r SESSION_ID CWD TRANSCRIPT_PATH <<< "$PARSED"
+IFS=$'\x1f' read -r SESSION_ID CWD TRANSCRIPT_PATH TOOL_NAME HOOK_EVENT <<< "$PARSED"
 
 # Fallbacks
 [ -z "$SESSION_ID" ] && SESSION_ID="${CLAUDE_SESSION_ID:-unknown}"
 [ -z "$CWD" ] && CWD="${CLAUDE_PROJECT_DIR:-$PWD}"
+
+# Some tools block waiting for the user to choose/approve (AskUserQuestion shows
+# options; ExitPlanMode asks to approve a plan). When such a tool is ABOUT to run
+# (PreToolUse), that means Claude needs ME -> show "waiting" (red), not "working".
+# On PostToolUse (the user already answered) it stays "working" and resumes.
+WAITING_TOOLS=" AskUserQuestion ExitPlanMode "
+if [ "$STATUS" = "working" ] && [ "$HOOK_EVENT" = "PreToolUse" ] \
+   && [ -n "$TOOL_NAME" ] && [[ "$WAITING_TOOLS" == *" $TOOL_NAME "* ]]; then
+  STATUS="waiting"
+fi
 
 # SessionEnd: remove this session from the dashboard, then exit.
 if [ "$STATUS" = "delete" ]; then
