@@ -219,6 +219,105 @@
     }
     .sid { font-family: ui-monospace, Menlo, monospace; }
 
+    /* Token usage bar */
+    .tokens { margin-top: calc(4px * var(--scale)); }
+    .tokens.hidden { display: none; }
+    .token-bar {
+      height: calc(6px * var(--scale));
+      border-radius: 999px;
+      background: #27272a;
+      overflow: hidden;
+    }
+    .token-fill {
+      height: 100%;
+      width: 0;
+      border-radius: 999px;
+      background: var(--green);
+      transition: width 0.4s ease, background 0.4s ease;
+    }
+    .token-fill.mid  { background: var(--yellow); }
+    .token-fill.high { background: var(--red); }
+    .token-text {
+      font-size: calc(11px * var(--scale));
+      color: var(--muted);
+      margin-top: calc(3px * var(--scale));
+      font-variant-numeric: tabular-nums;
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    /* Plan-usage strip (mirrors `/usage`) — sits full-width atop the grid */
+    .usage-strip {
+      flex-basis: 100%;
+      background: var(--card);
+      border: 1px solid var(--card-border);
+      border-radius: 14px;
+      padding: calc(12px * var(--scale)) calc(16px * var(--scale));
+      display: flex;
+      flex-direction: column;
+      gap: calc(10px * var(--scale));
+    }
+    .usage-head { display: flex; align-items: center; gap: 10px; }
+    .usage-head .label {
+      font-size: calc(12px * var(--scale));
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      font-weight: 600;
+    }
+    .usage-refresh {
+      background: transparent;
+      border: 1px solid var(--card-border);
+      color: var(--text);
+      border-radius: 6px;
+      width: calc(24px * var(--scale)); height: calc(24px * var(--scale));
+      font-size: calc(13px * var(--scale));
+      cursor: pointer;
+      line-height: 1;
+    }
+    .usage-refresh:active { opacity: 0.6; }
+    .usage-refresh.spin { animation: spin 0.8s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .usage-updated {
+      margin-left: auto;
+      font-size: calc(11px * var(--scale));
+      color: var(--muted);
+    }
+    .usage-gauges { display: flex; flex-wrap: wrap; gap: calc(18px * var(--scale)); }
+    .gauge {
+      flex: 1 1 calc(190px * var(--scale));
+      min-width: calc(150px * var(--scale));
+    }
+    .gauge .g-top {
+      display: flex;
+      justify-content: space-between;
+      font-size: calc(12px * var(--scale));
+      margin-bottom: calc(4px * var(--scale));
+    }
+    .gauge .g-pct { font-variant-numeric: tabular-nums; color: var(--muted); }
+    .gauge .g-bar {
+      height: calc(8px * var(--scale));
+      border-radius: 999px;
+      background: #27272a;
+      overflow: hidden;
+    }
+    .gauge .g-fill {
+      height: 100%;
+      width: 0;
+      border-radius: 999px;
+      background: var(--green);
+      transition: width 0.4s ease, background 0.4s ease;
+    }
+    .gauge .g-fill.mid  { background: var(--yellow); }
+    .gauge .g-fill.high { background: var(--red); }
+    .gauge .g-reset {
+      font-size: calc(10px * var(--scale));
+      color: var(--muted);
+      margin-top: calc(3px * var(--scale));
+    }
+    .usage-msg { font-size: calc(12px * var(--scale)); color: var(--muted); }
+
     #empty {
       position: fixed;
       inset: 0;
@@ -255,6 +354,16 @@
         <input id="fw-check" type="checkbox" />
       </label>
     </div>
+    <div class="row">
+      <label>Show token usage
+        <input id="tok-check" type="checkbox" />
+      </label>
+    </div>
+    <div class="row">
+      <label>Show plan usage
+        <input id="use-check" type="checkbox" />
+      </label>
+    </div>
     <button class="reset" id="reset-btn">Reset to defaults</button>
   </div>
 
@@ -275,9 +384,11 @@
     const sizeRange = document.getElementById('size-range');
     const sizeVal = document.getElementById('size-val');
     const fwCheck = document.getElementById('fw-check');
+    const tokCheck = document.getElementById('tok-check');
+    const useCheck = document.getElementById('use-check');
     const resetBtn = document.getElementById('reset-btn');
 
-    const DEFAULTS = { scale: 100, fullWidth: false };
+    const DEFAULTS = { scale: 100, fullWidth: false, showTokens: true, showUsage: true };
     let settings = loadSettings();
 
     function loadSettings() {
@@ -286,6 +397,8 @@
         return {
           scale: typeof s.scale === 'number' ? s.scale : DEFAULTS.scale,
           fullWidth: !!s.fullWidth,
+          showTokens: s.showTokens !== undefined ? !!s.showTokens : DEFAULTS.showTokens,
+          showUsage: s.showUsage !== undefined ? !!s.showUsage : DEFAULTS.showUsage,
         };
       } catch (e) {
         return { ...DEFAULTS };
@@ -300,6 +413,8 @@
       sizeRange.value = settings.scale;
       sizeVal.textContent = settings.scale + '%';
       fwCheck.checked = settings.fullWidth;
+      tokCheck.checked = settings.showTokens;
+      useCheck.checked = settings.showUsage;
     }
 
     settingsBtn.addEventListener('click', (e) => {
@@ -321,6 +436,18 @@
       settings.fullWidth = fwCheck.checked;
       applySettings();
       saveSettings();
+    });
+    tokCheck.addEventListener('change', () => {
+      settings.showTokens = tokCheck.checked;
+      applySettings();
+      saveSettings();
+      render(lastSessions);
+    });
+    useCheck.addEventListener('change', () => {
+      settings.showUsage = useCheck.checked;
+      applySettings();
+      saveSettings();
+      render(lastSessions);
     });
     resetBtn.addEventListener('click', () => {
       settings = { ...DEFAULTS };
@@ -381,7 +508,7 @@
 
     function render(sessions) {
       empty.classList.toggle('hidden', sessions.length > 0);
-      grid.innerHTML = '';
+      grid.innerHTML = usageHtml();
       for (const s of sessions) {
         const status = ['free', 'working', 'waiting'].includes(s.status) ? s.status : 'free';
         const card = document.createElement('div');
@@ -398,9 +525,121 @@
             <span class="sid">${escapeHtml(shortId(s.session_id))}</span>
             <span>${s.lastSeen ? timeAgo(s.lastSeen) : ''}</span>
           </div>
+          ${tokenHtml(s)}
         `;
         grid.appendChild(card);
       }
+    }
+
+    // Token usage bar: how full the context window is for this session.
+    function tokenHtml(s) {
+      if (!settings.showTokens) return '';
+      const used = Number(s.tokens);
+      if (!Number.isFinite(used) || used <= 0) return '';
+      const pct = Math.min(100, Math.round((used / contextLimit) * 100));
+      const left = Math.max(0, contextLimit - used);
+      const cls = pct >= 85 ? 'high' : pct >= 60 ? 'mid' : '';
+      return `
+        <div class="tokens">
+          <div class="token-bar"><div class="token-fill ${cls}" style="width:${pct}%"></div></div>
+          <div class="token-text">
+            <span>${fmtTokens(used)} / ${fmtTokens(contextLimit)} · ${pct}%</span>
+            <span>${fmtTokens(left)} left</span>
+          </div>
+        </div>
+      `;
+    }
+
+    function fmtTokens(n) {
+      if (!Number.isFinite(n)) return '?';
+      if (n >= 1000000) return (n / 1000000).toFixed(n >= 10000000 ? 0 : 1) + 'M';
+      if (n >= 1000) return Math.round(n / 1000) + 'K';
+      return String(n);
+    }
+
+    // ---- Plan usage (mirrors `/usage`) ----
+    let currentUsage = null;     // { data } | { error } | null, from the server
+    let usageRefreshing = false; // spin the ↻ button while a manual refresh runs
+
+    function usageHtml() {
+      if (!settings.showUsage || !currentUsage) return '';
+      const refreshBtn =
+        `<button class="usage-refresh ${usageRefreshing ? 'spin' : ''}" title="Refresh">↻</button>`;
+
+      if (currentUsage.error) {
+        const msg = {
+          'no-credentials': 'Sign in to Claude Code to see plan usage',
+          'expired': 'Token expired — open Claude Code to refresh it',
+          'unsupported-platform': '',  // hide entirely off macOS
+          'disabled': '',
+        };
+        const text = msg[currentUsage.error];
+        if (text === '' ) return '';
+        return `<div class="usage-strip">
+          <div class="usage-head"><span class="label">Plan usage</span>${refreshBtn}</div>
+          <div class="usage-msg">${escapeHtml(text || 'Plan usage unavailable')}</div>
+        </div>`;
+      }
+
+      const d = currentUsage.data || {};
+      const defs = [
+        ['five_hour', 'Session · 5h'],
+        ['seven_day', 'Week · all'],
+        ['seven_day_opus', 'Week · Opus'],
+        ['seven_day_sonnet', 'Week · Sonnet'],
+      ];
+      const gauges = defs.map(([key, label]) => {
+        const o = d[key];
+        if (!o || typeof o.utilization !== 'number') return '';
+        const pct = Math.round(o.utilization);
+        const cls = pct >= 85 ? 'high' : pct >= 60 ? 'mid' : '';
+        const reset = resetText(o.resets_at);
+        return `<div class="gauge">
+          <div class="g-top"><span>${label}</span><span class="g-pct">${pct}%</span></div>
+          <div class="g-bar"><div class="g-fill ${cls}" style="width:${Math.min(100, pct)}%"></div></div>
+          ${reset ? `<div class="g-reset">${reset}</div>` : ''}
+        </div>`;
+      }).filter(Boolean).join('');
+
+      if (!gauges) return '';
+      const updated = currentUsage.fetchedAt ? 'updated ' + timeAgo(currentUsage.fetchedAt) : '';
+      return `<div class="usage-strip">
+        <div class="usage-head">
+          <span class="label">Plan usage</span>${refreshBtn}
+          <span class="usage-updated">${updated}</span>
+        </div>
+        <div class="usage-gauges">${gauges}</div>
+      </div>`;
+    }
+
+    function resetText(iso) {
+      if (!iso) return '';
+      const t = Date.parse(iso);
+      if (isNaN(t)) return '';
+      const s = Math.floor((t - Date.now()) / 1000);
+      if (s <= 0) return 'resetting…';
+      if (s < 86400) {
+        const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60);
+        return 'resets in ' + (h ? h + 'h ' : '') + m + 'm';
+      }
+      const dd = new Date(t);
+      const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+      const hh = String(dd.getHours()).padStart(2, '0');
+      const mm = String(dd.getMinutes()).padStart(2, '0');
+      return 'resets ' + days[dd.getDay()] + ' ' + hh + ':' + mm;
+    }
+
+    function refreshUsage() {
+      if (usageRefreshing) return;
+      usageRefreshing = true;
+      render(lastSessions);
+      fetch('/usage').catch(() => {}).finally(() => {
+        // The server broadcasts fresh usage over WS, which clears the spinner;
+        // this is just a fallback in case that doesn't arrive.
+        setTimeout(() => {
+          if (usageRefreshing) { usageRefreshing = false; render(lastSessions); }
+        }, 4000);
+      });
     }
 
     function shortId(id) {
@@ -415,6 +654,11 @@
 
     // ---- Tap a card to dismiss it (handy for lingering red cards) ----
     grid.addEventListener('click', (e) => {
+      if (e.target.closest('.usage-refresh')) {
+        e.stopPropagation();
+        refreshUsage();
+        return;
+      }
       const card = e.target.closest('.card');
       if (!card) return;
       const id = card.dataset.id;
@@ -427,6 +671,7 @@
     // ---- WebSocket with auto-reconnect ----
     let ws = null;
     let lastSessions = [];
+    let contextLimit = 200000;  // updated from the server on each broadcast
 
     function connect() {
       const url = `ws://${location.host}`;
@@ -441,6 +686,13 @@
           const msg = JSON.parse(ev.data);
           if (msg.type === 'sessions') {
             lastSessions = msg.sessions || [];
+            if (Number.isFinite(msg.contextLimit) && msg.contextLimit > 0) {
+              contextLimit = msg.contextLimit;
+            }
+            if ('usage' in msg) {
+              currentUsage = msg.usage;
+              usageRefreshing = false;
+            }
             render(lastSessions);
           }
         } catch (e) { /* ignore */ }

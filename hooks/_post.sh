@@ -60,15 +60,23 @@ fi
 
 PROJECT="$(basename "$CWD")"
 
-# Conversation name: pull the AI-generated title from the transcript JSONL.
-# Prefer the latest "ai-title" (aiTitle); fall back to the latest prompt, then
-# to the first user message. Empty if the transcript isn't available yet.
+# From the transcript JSONL we pull two things in a single pass:
+#   1. Conversation name: the latest "ai-title" (aiTitle); fall back to the
+#      latest prompt, then the first user message.
+#   2. Token usage: the context size of the LAST assistant turn — that is
+#      input + cache_creation + cache_read tokens, i.e. how full the context
+#      window currently is. Empty if the transcript isn't available yet.
+# Output is three values separated by the Unit Separator: name, tokens, model.
 CONVERSATION=""
+TOKENS=""
+MODEL=""
 if [ -n "$TRANSCRIPT_PATH" ] && [ -f "$TRANSCRIPT_PATH" ]; then
-  CONVERSATION="$(python3 -c "
+  PARSED_TX="$(python3 -c "
 import json, os
-TAIL = 131072  # read only the last 128KB — newest ai-title lives near the end
+TAIL = 131072  # read only the last 128KB — newest ai-title & usage live near the end
 title = last_prompt = first_user = ''
+tokens = ''
+model = ''
 try:
     path = '''$TRANSCRIPT_PATH'''
     size = os.path.getsize(path)
@@ -100,22 +108,37 @@ try:
                     if isinstance(p, dict) and p.get('type') == 'text':
                         first_user = p.get('text', '')
                         break
+        elif t == 'assistant':
+            m = d.get('message', {})
+            u = m.get('usage') if isinstance(m, dict) else None
+            if isinstance(u, dict):
+                ctx = (u.get('input_tokens', 0) or 0) \
+                    + (u.get('cache_creation_input_tokens', 0) or 0) \
+                    + (u.get('cache_read_input_tokens', 0) or 0)
+                if ctx:
+                    tokens = ctx  # keep the LAST assistant turn's context size
+            if m.get('model'):
+                model = m['model']
     name = title or last_prompt or first_user
     name = ' '.join(name.split())  # collapse whitespace/newlines
-    print(name[:60])
+    print('\x1f'.join([name[:60], str(tokens), model]))
 except Exception:
-    print('')
+    print('\x1f'.join(['', '', '']))
 " 2>/dev/null)"
+  IFS=$'\x1f' read -r CONVERSATION TOKENS MODEL <<< "$PARSED_TX"
 fi
 
 # Build JSON body safely with python3.
 BODY="$(python3 -c "
 import json
+tokens = '''$TOKENS'''
 print(json.dumps({
     'session_id': '''$SESSION_ID''',
     'project': '''$PROJECT''',
     'conversation': '''$CONVERSATION''',
     'status': '''$STATUS''',
+    'tokens': int(tokens) if tokens.isdigit() else None,
+    'model': '''$MODEL''',
 }))
 " 2>/dev/null)"
 

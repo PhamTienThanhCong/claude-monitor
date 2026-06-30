@@ -104,6 +104,7 @@ one place:
 
 ```
 PORT=2202
+CONTEXT_LIMIT=1000000
 ```
 
 - `server.js` reads it on startup (a tiny built-in parser — no `dotenv`
@@ -112,12 +113,46 @@ PORT=2202
   port keeps everything in sync.
 - The dashboard connects to whatever host/port served the page, so it needs no
   change.
+- `CONTEXT_LIMIT` is the context-window size used to show **how many tokens are
+  left** on each card. Default `200000` (standard Claude); set `1000000` for
+  `[1m]` models such as Opus 4.8 1M.
+
+### Token usage
+
+Each card shows a small bar with how full the session's context window is —
+e.g. `192K / 1.0M · 19%` and `808K left`. The number is the **last assistant
+turn's context size** (`input + cache_creation + cache_read` tokens) read
+straight from the session transcript by the hooks, so it updates as Claude
+works. The bar turns yellow past 60% and red past 85%. Toggle it off via the
+**⚙** settings panel ("Show token usage").
+
+### Plan usage (the `/usage` numbers)
+
+A **PLAN USAGE** strip at the top of the dashboard mirrors Claude Code's
+`/usage` command — your **5-hour session limit** and **weekly limits** (all
+models / Opus / Sonnet), each with a percent, a colored bar, and a reset time.
+A **↻** button forces an immediate refresh; otherwise it auto-polls every
+`USAGE_POLL_SEC` seconds. Toggle it off via **⚙** ("Show plan usage").
+
+**How it works (and caveats):** the server reads your Claude Code OAuth token
+from the **macOS Keychain** (`Claude Code-credentials`) and calls the same
+endpoint `/usage` uses (`api.anthropic.com/api/oauth/usage`).
+
+- **macOS only.** Off macOS the strip stays hidden.
+- The first time `node` reads the Keychain item, macOS shows a prompt — click
+  **Always Allow** so the server can refresh it unattended.
+- The token is kept fresh by Claude Code itself (the server re-reads the
+  Keychain on each poll). If it ever shows "Token expired", open Claude Code.
+- This endpoint is **undocumented / unofficial** — it may change without notice.
+  Every failure degrades to a small message instead of crashing. Set
+  `TRACK_USAGE=false` in `.env` to turn the whole feature off.
 
 After changing the port, restart the server (`node server.js`).
 
 ## Endpoints
 
-- `POST /status` — `{ session_id, project, conversation, status }`
+- `POST /status` — `{ session_id, project, conversation, status, tokens, model }`
+- `GET /usage` — force-refresh plan usage now and return it (the dashboard's ↻)
 - `GET /` — serves the dashboard
 - `WebSocket` (same port **2202**) — broadcasts the sessions array
 
